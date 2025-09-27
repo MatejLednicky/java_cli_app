@@ -5,7 +5,7 @@ import picocli.CommandLine;
 
 @Component
 @CommandLine.Command(
-        name = "issuep",
+        name = "issue",
         description = "Issue tracker CLI",
         subcommands = {
                 CreateCommand.class,
