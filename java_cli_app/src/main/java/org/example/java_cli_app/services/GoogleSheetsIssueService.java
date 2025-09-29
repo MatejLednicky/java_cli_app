@@ -2,6 +2,7 @@ package org.example.java_cli_app.services;
 
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
+import com.google.api.services.sheets.v4.model.ClearValuesRequest;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import org.example.java_cli_app.enums.Status;
 import org.example.java_cli_app.facade.IssueServiceFacade;
@@ -39,10 +40,6 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
                     .execute();
 
             List<List<Object>> idRows = response.getValues();
-            Set<String> existingIds = idRows.stream()
-                    .filter(row -> !row.isEmpty())
-                    .map(row -> row.get(0).toString())
-                    .collect(Collectors.toSet());
 
             int newId;
             if (idRows.size() == 1) {
@@ -62,9 +59,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
             String parentIdStr = null;
             if (parentId != null) {
                 parentIdStr = "AD-" + parentId;
-                if (!existingIds.contains(parentIdStr)) {
-                    throw new IllegalArgumentException("Parent ID " + parentIdStr + " does not exist.");
-                }
+                findRowById(parentId);
             }
 
             List<Object> row = List.of(
@@ -95,28 +90,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
         try {
             Sheets sheetsService = provider.getSheetsService();
 
-            String helperCell = "Z1"; // unused column
-            String matchFormula = String.format("=MATCH(\"%s\"; A:A; 0)", "AD-"+issueId);
-
-            ValueRange formulaBody = new ValueRange()
-                    .setValues(List.of(List.of(matchFormula)));
-            sheetsService.spreadsheets().values()
-                    .update(SPREADSHEET_ID, helperCell, formulaBody)
-                    .setValueInputOption("USER_ENTERED")
-                    .execute();
-
-            ValueRange matchResult = sheetsService.spreadsheets().values()
-                    .get(SPREADSHEET_ID, helperCell)
-                    .setMajorDimension("ROWS")
-                    .execute();
-
-            List<List<Object>> values = matchResult.getValues();
-            if (values.get(0).get(0).toString().equals("#N/A")) {
-                System.out.println("Issue ID not found: " + issueId);
-                return;
-            }
-
-            int rowNumber = Integer.parseInt(values.get(0).get(0).toString());
+            int rowNumber = findRowById(issueId);
 
             List<ValueRange> updates = List.of(
                     new ValueRange()
@@ -170,5 +144,37 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
             throw new RuntimeException("Failed to list issues from Google Sheets", e);
         }
     }
+
+    private int findRowById(String issueId) throws IOException, GeneralSecurityException {
+        Sheets sheetsService = provider.getSheetsService();
+
+        // unused column for match function
+        String helperCell = "Z1";
+        String matchFormula = String.format("=MATCH(\"%s\"; A:A; 0)", "AD-"+issueId);
+
+
+        ValueRange formulaBody = new ValueRange().setValues(List.of(List.of(matchFormula)));
+        sheetsService.spreadsheets().values()
+                .update(SPREADSHEET_ID, helperCell, formulaBody)
+                .setValueInputOption("USER_ENTERED")
+                .execute();
+
+        ValueRange matchResult = sheetsService.spreadsheets().values()
+                .get(SPREADSHEET_ID, helperCell)
+                .setMajorDimension("ROWS")
+                .execute();
+
+        List<List<Object>> values = matchResult.getValues();
+        if (values.get(0).get(0).toString().equals("#N/A")) {
+            throw new IllegalArgumentException("Issue ID not found: " + issueId);
+        }
+
+        sheetsService.spreadsheets().values()
+                .clear(SPREADSHEET_ID, helperCell, new ClearValuesRequest())
+                .execute();
+
+        return Integer.parseInt(values.get(0).get(0).toString());
+    }
+
 
 }
