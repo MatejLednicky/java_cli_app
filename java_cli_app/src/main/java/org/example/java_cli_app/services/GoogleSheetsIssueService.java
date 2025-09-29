@@ -6,6 +6,7 @@ import com.google.api.services.sheets.v4.model.ClearValuesRequest;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import org.example.java_cli_app.enums.Status;
 import org.example.java_cli_app.facade.IssueServiceFacade;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -20,8 +21,11 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
     private final GoogleSheetsProvider provider;
 
-    private static final String SPREADSHEET_ID = "1C3iDl_MlzykAf0GLINHKCbj-QDFvMBbolgP0vFxTzBk";
-    private static final String SHEET_NAME = "Issues";
+    @Value("${google.sheets.spreadsheet-id}")
+    private String spreadsheetId;
+
+    @Value("${google.sheets.sheet-name}")
+    private String sheetName;
 
     public GoogleSheetsIssueService(GoogleSheetsProvider provider) {
         this.provider = provider;
@@ -34,7 +38,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
             // get ids from first column A
             ValueRange response = sheetsService.spreadsheets().values()
-                    .get(SPREADSHEET_ID, SHEET_NAME + "!A:A")
+                    .get(spreadsheetId, sheetName + "!A:A")
                     .execute();
 
             List<List<Object>> idRows = response.getValues();
@@ -71,7 +75,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
             ValueRange newIssueData = new ValueRange().setValues(Collections.singletonList(row));
 
             sheetsService.spreadsheets().values()
-                    .append(SPREADSHEET_ID, SHEET_NAME, newIssueData)
+                    .append(spreadsheetId, sheetName, newIssueData)
                     .setValueInputOption("RAW")
                     .execute();
 
@@ -91,17 +95,17 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
             List<ValueRange> updates = List.of(
                     new ValueRange()
-                            .setRange(String.format("%s!D%d", SHEET_NAME, rowNumber))
+                            .setRange(String.format("%s!D%d", sheetName, rowNumber))
                             .setValues(List.of(List.of(status.name()))),
                     new ValueRange()
-                            .setRange(String.format("%s!F%d", SHEET_NAME, rowNumber))
+                            .setRange(String.format("%s!F%d", sheetName, rowNumber))
                             .setValues(List.of(List.of(
                                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
                             )))
             );
 
             sheetsService.spreadsheets().values()
-                    .batchUpdate(SPREADSHEET_ID, new BatchUpdateValuesRequest()
+                    .batchUpdate(spreadsheetId, new BatchUpdateValuesRequest()
                             .setValueInputOption("RAW")
                             .setData(updates))
                     .execute();
@@ -124,12 +128,12 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
             ValueRange formulaBody = new ValueRange().setValues(List.of(List.of(filterFormula)));
             service.spreadsheets().values()
-                    .update(SPREADSHEET_ID, helperCell, formulaBody)
+                    .update(spreadsheetId, helperCell, formulaBody)
                     .setValueInputOption("USER_ENTERED")
                     .execute();
 
             ValueRange response = service.spreadsheets().values()
-                    .get(SPREADSHEET_ID, helperRange)
+                    .get(spreadsheetId, helperRange)
                     .execute();
 
             List<List<Object>> rows = response.getValues();
@@ -147,7 +151,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
             // clear used helper cells
             service.spreadsheets().values()
-                    .clear(SPREADSHEET_ID, helperCell, new ClearValuesRequest())
+                    .clear(spreadsheetId, helperCell, new ClearValuesRequest())
                     .execute();
 
         } catch (IOException | GeneralSecurityException e) {
@@ -155,7 +159,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
         }
     }
 
-    private int findRowById(String issueId) throws IOException, GeneralSecurityException {
+    public int findRowById(String issueId) throws IOException, GeneralSecurityException {
         Sheets sheetsService = provider.getSheetsService();
 
         // unused column for match function
@@ -164,12 +168,12 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
         ValueRange formulaBody = new ValueRange().setValues(List.of(List.of(matchFormula)));
         sheetsService.spreadsheets().values()
-                .update(SPREADSHEET_ID, helperCell, formulaBody)
+                .update(spreadsheetId, helperCell, formulaBody)
                 .setValueInputOption("USER_ENTERED")
                 .execute();
 
         ValueRange matchResult = sheetsService.spreadsheets().values()
-                .get(SPREADSHEET_ID, helperCell)
+                .get(spreadsheetId, helperCell)
                 .setMajorDimension("ROWS")
                 .execute();
 
@@ -180,7 +184,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
         // clear used helper cells
         sheetsService.spreadsheets().values()
-                .clear(SPREADSHEET_ID, helperCell, new ClearValuesRequest())
+                .clear(spreadsheetId, helperCell, new ClearValuesRequest())
                 .execute();
 
         return Integer.parseInt(values.get(0).get(0).toString());
