@@ -65,10 +65,10 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
             List<Object> row = List.of(
                     "AD-" + newId,
                     description,
-                    parentIdStr != null ? parentId : "",
+                    parentIdStr != null ? parentId : " ",
                     Status.OPEN.name(),
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")),
-                    ""
+                    " "
             );
 
             ValueRange newIssueData = new ValueRange().setValues(Collections.singletonList(row));
@@ -121,24 +121,36 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
         try {
             Sheets service = provider.getSheetsService();
 
+            String helperCell = "Z1";
+            String helperRange = "Z1:AE";
+            String filterFormula = String.format("=FILTER(A:F; D:D=\"%s\")", status.name());
+
+            ValueRange formulaBody = new ValueRange().setValues(List.of(List.of(filterFormula)));
+            service.spreadsheets().values()
+                    .update(SPREADSHEET_ID, helperCell, formulaBody)
+                    .setValueInputOption("USER_ENTERED")
+                    .execute();
+
             ValueRange response = service.spreadsheets().values()
-                    .get(SPREADSHEET_ID, SHEET_NAME + "!A:F")
+                    .get(SPREADSHEET_ID, helperRange)
                     .execute();
 
             List<List<Object>> rows = response.getValues();
-            if (rows.size() == 1) {
-                System.out.println("No issues found");
+            if (rows == null || rows.isEmpty()) {
+                System.out.println("No issues found with status: " + status);
+            } else {
+                System.out.println("ID | Description | Parent ID | Status | Created at | Updated at");
+                System.out.println("---------------------------------------------------------------");
+
+                for (List<Object> row : rows) {
+                    System.out.printf("%s | %s | %s | %s | %s | %s%n",
+                            row.get(0), row.get(1), row.get(2), row.get(3), row.get(4), row.get(5));
+                }
             }
 
-            System.out.println("ID | Description | Parent ID | Status | Created at | Updated at");
-            System.out.println("---------------------------------------------------------------");
-
-            rows.stream()
-                    .filter(r -> r.get(3).equals(status.name()))
-                    .forEach(r -> {
-                        System.out.printf("%s | %s | %s | %s | %s | %s%n",
-                                r.get(0), r.get(1), r.get(2), r.get(3), r.get(4), r.get(5));
-                    });
+            service.spreadsheets().values()
+                    .clear(SPREADSHEET_ID, helperCell, new ClearValuesRequest())
+                    .execute();
 
         } catch (IOException | GeneralSecurityException e) {
             throw new RuntimeException("Failed to list issues from Google Sheets", e);
@@ -151,7 +163,6 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
         // unused column for match function
         String helperCell = "Z1";
         String matchFormula = String.format("=MATCH(\"%s\"; A:A; 0)", "AD-"+issueId);
-
 
         ValueRange formulaBody = new ValueRange().setValues(List.of(List.of(matchFormula)));
         sheetsService.spreadsheets().values()
