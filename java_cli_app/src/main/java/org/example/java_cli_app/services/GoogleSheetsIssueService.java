@@ -95,43 +95,47 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
         try {
             Sheets sheetsService = provider.getSheetsService();
 
-            ValueRange response = sheetsService.spreadsheets().values()
-                    .get(SPREADSHEET_ID, SHEET_NAME + "!A:A")
+            String helperCell = "Z1"; // unused column
+            String matchFormula = String.format("=MATCH(\"%s\"; A:A; 0)", "AD-"+issueId);
+
+            ValueRange formulaBody = new ValueRange()
+                    .setValues(List.of(List.of(matchFormula)));
+            sheetsService.spreadsheets().values()
+                    .update(SPREADSHEET_ID, helperCell, formulaBody)
+                    .setValueInputOption("USER_ENTERED")
                     .execute();
 
-            List<List<Object>> idRows = response.getValues();
-            if (idRows == null) {
-                throw new RuntimeException("No data found in spreadsheet");
+            ValueRange matchResult = sheetsService.spreadsheets().values()
+                    .get(SPREADSHEET_ID, helperCell)
+                    .setMajorDimension("ROWS")
+                    .execute();
+
+            List<List<Object>> values = matchResult.getValues();
+            if (values.get(0).get(0).toString().equals("#N/A")) {
+                System.out.println("Issue ID not found: " + issueId);
+                return;
             }
 
-            for (int i = 1; i < idRows.size(); i++) {
-                List<Object> row = idRows.get(i);
-                if (!row.isEmpty() && row.get(0).equals("AD-" + issueId)) {
+            int rowNumber = Integer.parseInt(values.get(0).get(0).toString());
 
-                    int rowNumber = i + 1;
+            List<ValueRange> updates = List.of(
+                    new ValueRange()
+                            .setRange(String.format("%s!D%d", SHEET_NAME, rowNumber))
+                            .setValues(List.of(List.of(status.name()))),
+                    new ValueRange()
+                            .setRange(String.format("%s!F%d", SHEET_NAME, rowNumber))
+                            .setValues(List.of(List.of(
+                                    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
+                            )))
+            );
 
-                    List<ValueRange> updates = List.of(
-                            new ValueRange()
-                                    .setRange(String.format("%s!D%d", SHEET_NAME, rowNumber))
-                                    .setValues(List.of(List.of(status.name()))),
-                            new ValueRange()
-                                    .setRange(String.format("%s!F%d", SHEET_NAME, rowNumber))
-                                    .setValues(List.of(List.of(
-                                            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
-                                    )))
-                    );
+            sheetsService.spreadsheets().values()
+                    .batchUpdate(SPREADSHEET_ID, new BatchUpdateValuesRequest()
+                            .setValueInputOption("RAW")
+                            .setData(updates))
+                    .execute();
 
-                    sheetsService.spreadsheets().values()
-                            .batchUpdate(SPREADSHEET_ID, new BatchUpdateValuesRequest()
-                                    .setValueInputOption("RAW")
-                                    .setData(updates))
-                            .execute();
-
-                    System.out.println("Issue " + issueId + " updated to " + status);
-                    return;
-                }
-            }
-            System.out.println("Issue ID not found: " + issueId);
+            System.out.println("Issue " + issueId + " updated to " + status);
 
         } catch (IOException | GeneralSecurityException e) {
             throw new RuntimeException("Failed to update issue in Google Sheets", e);
