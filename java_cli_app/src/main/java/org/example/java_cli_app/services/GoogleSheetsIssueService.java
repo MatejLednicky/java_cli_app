@@ -140,7 +140,31 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
     @Override
     public void listIssues(Status status) {
-        System.out.printf("List of issues with status: %s%n", status);
+        try {
+            Sheets service = provider.getSheetsService();
+
+            ValueRange response = service.spreadsheets().values()
+                    .get(SPREADSHEET_ID, SHEET_NAME + "!A:F")
+                    .execute();
+
+            List<List<Object>> rows = response.getValues();
+            if (rows.size() == 1) {
+                System.out.println("No issues found");
+            }
+
+            System.out.println("ID | Description | Parent ID | Status | Created at | Updated at");
+            System.out.println("---------------------------------------------------------------");
+
+            rows.stream()
+                    .filter(r -> r.get(3).equals(status.name()))
+                    .forEach(r -> {
+                        System.out.printf("%s | %s | %s | %s | %s | %s%n",
+                                r.get(0), r.get(1), r.get(2), r.get(3), r.get(4), r.get(5));
+                    });
+
+        } catch (IOException | GeneralSecurityException e) {
+            throw new RuntimeException("Failed to list issues from Google Sheets", e);
+        }
     }
 
 }
