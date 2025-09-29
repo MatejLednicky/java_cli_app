@@ -1,6 +1,7 @@
 package org.example.java_cli_app.services;
 
 import com.google.api.services.sheets.v4.Sheets;
+import com.google.api.services.sheets.v4.model.BatchUpdateValuesRequest;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import org.example.java_cli_app.enums.Status;
 import org.example.java_cli_app.facade.IssueServiceFacade;
@@ -91,7 +92,50 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
 
     @Override
     public void updateIssue(String issueId, Status status) {
-        System.out.printf("Updating issue %s to status: %s%n", issueId, status);
+        try {
+            Sheets sheetsService = provider.getSheetsService();
+
+            ValueRange response = sheetsService.spreadsheets().values()
+                    .get(SPREADSHEET_ID, SHEET_NAME + "!A:A")
+                    .execute();
+
+            List<List<Object>> idRows = response.getValues();
+            if (idRows == null) {
+                throw new RuntimeException("No data found in spreadsheet");
+            }
+
+            for (int i = 1; i < idRows.size(); i++) {
+                List<Object> row = idRows.get(i);
+                if (!row.isEmpty() && row.get(0).equals("AD-" + issueId)) {
+
+                    int rowNumber = i + 1;
+
+                    List<ValueRange> updates = List.of(
+                            new ValueRange()
+                                    .setRange(String.format("%s!D%d", SHEET_NAME, rowNumber))
+                                    .setValues(List.of(List.of(status.name()))),
+                            new ValueRange()
+                                    .setRange(String.format("%s!F%d", SHEET_NAME, rowNumber))
+                                    .setValues(List.of(List.of(
+                                            LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm"))
+                                    )))
+                    );
+
+                    sheetsService.spreadsheets().values()
+                            .batchUpdate(SPREADSHEET_ID, new BatchUpdateValuesRequest()
+                                    .setValueInputOption("RAW")
+                                    .setData(updates))
+                            .execute();
+
+                    System.out.println("Issue " + issueId + " updated to " + status);
+                    return;
+                }
+            }
+            System.out.println("Issue ID not found: " + issueId);
+
+        } catch (IOException | GeneralSecurityException e) {
+            throw new RuntimeException("Failed to update issue in Google Sheets", e);
+        }
     }
 
     @Override
