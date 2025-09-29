@@ -68,7 +68,6 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")),
                     " "
             );
-
             ValueRange newIssueData = new ValueRange().setValues(Collections.singletonList(row));
 
             sheetsService.spreadsheets().values()
@@ -76,7 +75,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
                     .setValueInputOption("RAW")
                     .execute();
 
-            System.out.println("Issue created in Google Sheets: " + description); // print issue detail
+            System.out.println("Issue "+ newId + " created in Google Sheets: " + description);
 
         } catch (IOException | GeneralSecurityException e) {
             throw new RuntimeException("Failed to create issue in Google Sheets", e);
@@ -146,6 +145,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
                 }
             }
 
+            // clear used helper cells
             service.spreadsheets().values()
                     .clear(SPREADSHEET_ID, helperCell, new ClearValuesRequest())
                     .execute();
@@ -178,6 +178,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
             throw new IllegalArgumentException("Issue ID not found: " + issueId);
         }
 
+        // clear used helper cells
         sheetsService.spreadsheets().values()
                 .clear(SPREADSHEET_ID, helperCell, new ClearValuesRequest())
                 .execute();
