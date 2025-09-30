@@ -122,8 +122,8 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
         try {
             Sheets service = provider.getSheetsService();
 
-            String helperCell = "Z1";
-            String helperRange = "Z1:AE";
+            String helperCell = sheetName + "!Z1";
+            String helperRange = sheetName + "!Z1:AE";
             String filterFormula = String.format("=FILTER(A:F; D:D=\"%s\")", status.name());
 
             ValueRange formulaBody = new ValueRange().setValues(List.of(List.of(filterFormula)));
