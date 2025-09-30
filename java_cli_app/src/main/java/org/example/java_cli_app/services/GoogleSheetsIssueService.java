@@ -137,7 +137,7 @@ public class GoogleSheetsIssueService implements IssueServiceFacade {
                     .execute();
 
             List<List<Object>> rows = response.getValues();
-            if (rows == null || rows.isEmpty()) {
+            if (rows.get(0).get(0).toString().equals("#N/A")) {
                 System.out.println("No issues found with status: " + status);
             } else {
                 System.out.println("ID | Description | Parent ID | Status | Created at | Updated at");
